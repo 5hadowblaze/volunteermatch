@@ -1,6 +1,17 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
+const character = {
+  'Animal': '🐶',
+  'Elderly': '👵',
+  'Greener Planet': '🌱',
+  'Sports': '⚽',
+  'Medical': '🧬',
+  'Disability': '♿',
+  'Community': '🤝',
+  'Educational': '🎓',
+}
+
 const InterestsStep = ({ interests, selectedInterests, onToggle, onNext, onBack }) => {
   const container = {
     hidden: { opacity: 0 },
@@ -48,8 +59,8 @@ const InterestsStep = ({ interests, selectedInterests, onToggle, onNext, onBack 
                   : 'border-gray-200 hover:border-gray-300 text-gray-600 hover:bg-gray-50'
                 }`}
             >
-              <span className="text-3xl">{interest.icon}</span>
-              <span className="font-medium">{interest.label}</span>
+              <span className="text-3xl">{character[interest.category]}</span>
+              <span className="font-medium">{interest.name}</span>
             </button>
           </motion.div>
         ))}

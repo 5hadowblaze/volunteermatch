@@ -35,7 +35,7 @@ const VerificationBadge = ({ type }) => {
 const OpportunityCard = ({ opportunity }) => {
   return (
     <div className='opportunity'>
-      <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
+      <div className="bg-gray-50 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="p-6">
           {/* Header section */}
           <div className="flex flex-col gap-4">
@@ -48,7 +48,7 @@ const OpportunityCard = ({ opportunity }) => {
                 </h3>
 
                 <p className="text-sm text-gray-500">
-                  {opportunity.organization.name}
+                  {opportunity.organization.name} {opportunity.organization.approved && ("✔️")}
                 </p>
               </div>
               <h4 className='text-sm text-gray-500'>
@@ -110,7 +110,7 @@ const BrowseOpportunities = () => {
   const [opportunities, setOpportunities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState([]);
-
+  const [sortedOpportunities, setSortedOpportunities] = useState([...opportunities]);
   function searchOpportunity() {
     let input = document.getElementById("searchBar").value.toLowerCase();
     let opportunities = document.querySelectorAll(".opportunity");
@@ -123,6 +123,7 @@ const BrowseOpportunities = () => {
         }
     });
 }
+
 
   useEffect(() => {
     fetchOpportunities();
@@ -139,6 +140,33 @@ const BrowseOpportunities = () => {
       setIsLoading(false);
     }
   };
+
+  async function orderOpportunities(order) {
+    //const response = await api.post('/opportunities/filter/', {opportunities, order});
+    let ordered = [...opportunities];
+    if (order === "Closest Deadline") {
+        setOpportunities(opportunities.sort((a, b) => new Date(a.end_date) - new Date(b.end_date)));
+    } else if (order === "Furthest Deadline") {
+        setOpportunities(opportunities.sort((a, b) => new Date(b.end_date) - new Date(a.end_date)));
+    } else if (order === "Newest") {
+        setOpportunities(opportunities.sort((a, b) => new Date(b.date_created) - new Date(a.date_created)));
+    } else if (order === "Oldest") {
+        setOpportunities(opportunities.sort((a, b) => new Date(a.date_created) - new Date(b.date_created)));
+    } else if (order === "Largest Capacity") {
+        setOpportunities(opportunities.sort((a, b) => a.capacity - b.capacity));
+    } else if (order === "Smallest Capacity") {
+        setOpportunities(opportunities.sort((a, b) => b.capacity - a.capacity));
+    } else if (order === "Close to Capacity") {
+      setOpportunities(opportunities.sort((a, b) => (a.capacity - a.current_count) - (b.capacity - b.current_count)));
+    } else if (order === "Low to High Duration") {
+      setOpportunities(opportunities.sort((a, b) => a.duration - b.duration));
+    } else if (order === "High to Low Duration") {
+      setOpportunities(opportunities.sort((a, b) => b.duration - a.duration));
+    } else {
+        fetchOpportunities();
+    }
+    setSortedOpportunities(ordered);
+  }
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -180,7 +208,7 @@ const BrowseOpportunities = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/opportunities/distance/filter/', {
+      const response = await fetch('/api/opportunities/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -206,7 +234,7 @@ const BrowseOpportunities = () => {
       <div className="min-h-screen bg-white -mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-8 mt-8 text-center">
             <h1 className="text-3xl font-semibold text-gray-900">Discover Opportunities</h1>
             <p className="mt-2 text-gray-600">Explore volunteer opportunities near you</p>
           </div>
@@ -218,7 +246,7 @@ const BrowseOpportunities = () => {
                 {/* Categories Section */}
                 <div>
                   <h2 className="text-lg font-medium text-gray-900 mb-4">Categories</h2>
-                  <div className="space-y-2">
+                  <div className="space-y-2 bg-blue-100 rounded-xl">
                     {isLoading ? (
                     <div className="col-span-2 text-center py-12">
                       <Spin/>
@@ -244,8 +272,9 @@ const BrowseOpportunities = () => {
                 </div>
 
                 {/* Locations Section */}
-                <div>
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">Location</h2>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Location</h2>
+                <div className='bg-green-100 rounded-xl'>
+                  
                   <form className="space-y-2" onSubmit={handleSubmit}>
                       <input
                         id='user_postcode'
@@ -261,7 +290,7 @@ const BrowseOpportunities = () => {
                         className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200"
                         onChange={(e) => setFormData({...formData, max_distance: e.target.value})}
                       />
-                      <button className="bg-white-500 text-grey px-4 py-2 rounded mt-2 w-full hover:bg-gray-50" type='submit'>Submit</button>
+                      <button className="hover:cursor-pointer bg-white-500 text-grey px-4 py-2 rounded mt-2 w-full hover:bg-gray-50" type='submit'>Submit</button>
                   </form>
                 </div>
               </div>
@@ -280,20 +309,23 @@ const BrowseOpportunities = () => {
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200"
                   />
                 </div>
-                <div className="flex gap-4">
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200">
-                    <option>Location</option>
-                    <option>Within 5 miles</option>
-                    <option>Within 10 miles</option>
-                    <option>Within 25 miles</option>
+                <div>
+                  <select 
+                    onChange={(e) => orderOpportunities(e.target.value)}
+                    className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 hover:cursor-pointer"
+                  >
+                    <option value="">Sort By</option>
+                    <option value="Closest Deadline">Closest Deadline</option>
+                    <option value="Furthest Deadline">Furthest Deadline</option>
+                    <option value="Newest">Newest</option>
+                    <option value="Oldest">Oldest</option>
+                    <option value="Largest Capacity">Largest Capacity</option>
+                    <option value="Smallest Capacity">Smallest Capacity</option>
+                    <option value="Close to Capacity">Close to Capacity</option>
+                    <option value="Low to High Duration">Shortest Duration</option>
+                    <option value="High to Low Duration">Longest Duration</option>
                   </select>
-                  <select className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200">
-                    <option>Date</option>
-                    <option>Today</option>
-                    <option>This Week</option>
-                    <option>This Month</option>
-                  </select>
-                </div>
+                  </div>
               </div>
 
               {/* Opportunities Grid */}

@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils.timezone import make_aware
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth import authenticate
@@ -29,6 +30,12 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 from geopy.distance import geodesic
 
+from django.utils import timezone
+import resend
+import random
+import string
+from django.core.mail import send_mail
+from django.utils import timezone
 
 # Use this file for your templated views only
 from django.http import HttpResponse, HttpResponseForbidden
@@ -38,113 +45,8 @@ from django.http import HttpResponse
 from .forms import *
 from django.contrib.auth.decorators import login_required
 from django.utils.translation import gettext as _
-
-def view_all_opportunities(request):
-    if request.method == "POST":
-        return(filtered_opp(request))
-    else:
-        context = {
-            'charities': Opportunity.objects.all(),
-        }
-        return render(request, 'viewAllOpportunities.html', context)
-
-def view_badges(request):
-
-    context = {
-
-    }
-
-    if(request.user.is_authenticated):
-        return render(request, 'badgesView.html', context)
-    return render(request, 'viewBadgeOptions.html')
-
-
-@login_required
-def view_specified_badge(request, slug):
-
-    context = {
-        "score":50,
-        "global_score":50,
-        "title": slug.replace("-", " "),
-        "slug":slug
-    }
-
-    return render(request, 'singleBadgeView.html', context)
-
-def view_all_badges(request, slug):
-
-    badge1 = "/media/badge_placeholder.png"
-    badge2 = "/media/badge_placeholder.png"
-    badge3 = "/media/badge_placeholder.png"
-    badge4 = "/media/badge_placeholder.png"
-    badge5 = "/media/badge_placeholder.png"
-    badge6 = "/media/badge_placeholder.png"
-
-    if slug == "Elderly-Badges":
-        badge1 = "/media/ElderlyBadge.png"
-        badge2 = "/media/ElderlyBadge.png"
-        badge3 = "/media/ElderlyBadge.png"
-        badge4 = "/media/ElderlyBadge.png"
-
-
-    context = {
-        "badge1": badge1,
-        "badge2": badge2,
-        "badge3": badge3,
-        "badge4": badge4,
-        "badge5": badge5,
-        "badge6": badge6,
-        "title": slug.replace("-", " "),
-    }
-
-    return render(request, 'viewAllBadgeUpgrades.html', context)
-
-def hello(request):         #  Used to collect all information needed to display the homepage and then reders the homepage
-    message = ""
-
-
-    charities = Organization.objects.all()
-    friends = []
-    current_user = None
-    if request.user.is_authenticated:
-        current_user = Volunteer.objects.get(user = request.user)
-        if current_user == None:
-            current_user = Organization.objects.get(user = request.user)
-
-    if request.method == "POST":
-        fID = request.POST.get("friend_id")
-        try:
-            friendship = Friendship.objects.get(to_volunteer = current_user, from_volunteer = Volunteer.objects.get(id = fID))
-            friendship.delete()
-        except:
-            friendship = Friendship.objects.get(to_volunteer = Volunteer.objects.get(id = fID), from_volunteer = current_user)
-            friendship.delete()
-
-        message = "Removed Friend Successfully"
-
-    for friendship in Friendship.objects.all():
-        if friendship.to_volunteer == current_user or friendship.from_volunteer == current_user:
-            if friendship.to_volunteer == current_user:
-                friends.append(friendship.from_volunteer)
-            elif friendship.from_volunteer == current_user:
-                friends.append(friendship.to_volunteer)
-
-    context = {
-            'ongoingActivities': ['Activity 1', 'Activity 2'],
-            'friends' : friends,
-            'charities': charities,
-            'message': message
-        }
-
-    if request.user.is_authenticated:
-        return render(request, 'homepage.html', context)
-    else:
-        return render(request, 'noLoginHome.html', context)
-
-
-
-def custom404(request, exception):          #  used to render the 404 page when a 404 error is thrown only when django debug settings set to False
-    return render(request, "404Page.html", status = 404)
+from django.contrib.auth.hashers import check_password
+from urllib.parse import urlparse
 
 @api_view(["GET"])
 def list_pending_friendships(request):
@@ -168,7 +70,13 @@ def calculate_impact(charity, volunteer):
             current_application = application
             break
     if current_application == None:
-        return HttpResponse("No Application for this volunteer")
+        participants_at_application = opportunity.current_volunteers_count
+        date_time_applied = datetime.now()
+        duration_taken = int(opportunity.estimated_duration)
+    else:
+        participants_at_application = current_application.current_volunteers
+        date_time_applied = current_application.date_applied
+        duration_taken = int(len(current_application.dates_worked.split(",")))
 
     # Open and load JSON file to get population data
     file_path = os.path.join(os.path.dirname(__file__), "components", "gb.json")
@@ -176,22 +84,25 @@ def calculate_impact(charity, volunteer):
         data = json.load(file)
 
     city = opportunity.location_name # get from organisation api
-    start_time = opportunity.start_time
-    end_time = opportunity.end_time
-    opportunities_completed = volunteer.opportunities_completed
-    duration_taken = datetime.now().day - application.date_applied.day
-    estimated_duration = opportunity.estimated_duration
+    start_time = int(opportunity.start_time)
+    end_time = int(opportunity.end_time)
+    opportunities_completed = int(volunteer.opportunities_completed)
+    
+    estimated_duration = int(opportunity.estimated_duration)
     effort_ranking = opportunity.estimated_effort_ranking
-    if volunteer.last_completion != None:
+    if volunteer.last_completion is not None:
         days_since_last_opportunity_completed = datetime.now().day - volunteer.last_completion.day
     else:
         days_since_last_opportunity_completed = 100000
     bonus_points = 0 #-----------------------------------------------FIXXXXXX
     start_date = opportunity.start_date
-    date_time_applied = current_application.date_applied
+    
     end_date = opportunity.end_date
-    capacity = opportunity.capacity
-    participants_at_application = current_application.current_volunteers
+    capacity = int(opportunity.capacity)
+    try:
+        date_time_applied = make_aware(date_time_applied)
+    except:
+        print("naive")
 
 
     people_helped = 0
@@ -200,6 +111,7 @@ def calculate_impact(charity, volunteer):
     opening_duration = end_date.day - start_date.day    # finds how long the opportunity was posted for
     if ((end_date.day - date_time_applied.day) < opening_duration * 0.15) and participants_at_application < capacity / 2:
         bonus_points += round((end_date - date_time_applied).total_seconds() / 3600 / 6)
+        print("applied last minute bonus points")
 
         # adds a point for every hour they applied before the closing when it is in the last 15% of opening time
 
@@ -284,11 +196,11 @@ def calculate_impact(charity, volunteer):
 
     if days_since_last_opportunity_completed < 30 or days_since_last_opportunity_completed > 120:
         final_value *= 1.2              # adds a streak bonus to help volunteers keep going as it gives them incentive to do more volunteering
-
+        print("less than 30 days multiplier 1.2X")
     if(opportunities_completed < 5):
         final_value *= 1 + (0.25 - opportunities_completed / 20)    # allows for new users to gain increased points for their first 5 opportunities
-
-    final_value /= 2
+        print("less than 5 opps multiplier " + str(1 + (0.25 - opportunities_completed / 20)) + "X")
+    final_value /= 1.5
     final_value = round(final_value)
 
     print(str(time_value) + " time")
@@ -305,6 +217,9 @@ def calculate_impact(charity, volunteer):
 @api_view(["DELETE"])
 def delete_friendship(request, friend_id, volunteer_id):
     if request.method == "DELETE":
+        if volunteer_id != Volunteer.objects.get(user = request.user).id:
+            return Response({'error': 'Only the user of the friend can remove friends'},
+                       status=status.HTTP_403_FORBIDDEN)
         u = Volunteer.objects.get(id = volunteer_id)
         friend = Volunteer.objects.get(id = friend_id)
         for friendship in Friendship.objects.all():
@@ -319,6 +234,9 @@ def delete_friendship(request, friend_id, volunteer_id):
 @api_view(["POST"])
 def create_friendship(request, friend_id, volunteer_id):
     if request.method == "POST":
+        if volunteer_id != Volunteer.objects.get(user = request.user).id:
+            return Response({'error': 'Only the user of the friend can remove friends'},
+                       status=status.HTTP_403_FORBIDDEN)
         u = Volunteer.objects.get(id = volunteer_id)
         friend = Volunteer.objects.get(id = friend_id)
 
@@ -330,6 +248,9 @@ def create_friendship(request, friend_id, volunteer_id):
 @api_view(["POST"])
 def accept_friendship(request, friend_id, volunteer_id):
     if request.method == "POST":
+        if volunteer_id != Volunteer.objects.get(user = request.user).id:
+            return Response({'error': 'Only the user of the friend can remove friends'},
+                       status=status.HTTP_403_FORBIDDEN)
         u = Volunteer.objects.get(id = volunteer_id)
         friend = Volunteer.objects.get(id = friend_id)
 
@@ -340,60 +261,6 @@ def accept_friendship(request, friend_id, volunteer_id):
         return JsonResponse({"message": "Friend request sent"}, status=201)
     return JsonResponse({"error": "Invalid request"}, status=405)
 
-@login_required
-def view_friends(request):
-    message = ""
-    if request.user.is_authenticated:
-        current_user = Volunteer.objects.filter(user = request.user)
-        if len(current_user) == 0:
-            return HttpResponseForbidden("only volunteers can access this")
-
-    fromV = Volunteer.objects.get(user = request.user)
-
-    if request.method =="POST":
-        if request.POST.get("accept"):
-            friendship = Friendship.objects.get(id = request.POST.get("accept"))
-            friendship.status = "accepted"
-            friendship.save()
-            message = "Added as a Friend Successfully"
-        elif request.POST.get("cancel_friendship_id"):
-            friendship = Friendship.objects.get(id = request.POST.get("cancel_friendship_id"))
-            friendship.delete()
-        else:
-
-            toVol = request.POST.get("volunteer_id")
-            toV = Volunteer.objects.get(id = toVol)
-            message = "Sent a request to " + toV.display_name
-
-
-            Friendship.objects.create(from_volunteer = fromV, to_volunteer = toV, status = "pending")
-
-    reqs = []
-    sent = []
-
-    for friendship in Friendship.objects.filter(status = "pending"):
-        if friendship.to_volunteer == fromV:
-            reqs.append(friendship)
-        if friendship.from_volunteer == fromV:
-            sent.append(friendship)
-
-
-    users = Volunteer.objects.exclude(id = fromV.id)
-
-    for friendship in Friendship.objects.all():
-        if friendship.to_volunteer == fromV or friendship.from_volunteer == fromV:
-            users = users.exclude(id = friendship.to_volunteer.id)
-            users = users.exclude(id = friendship.from_volunteer.id)
-
-
-    context = {
-            "message": message,
-            "users": users,
-            "requests": reqs,
-            "sent_reqs": sent
-        }
-
-    return render(request, 'friends_page.html', context)
 
 @api_view(['GET'])
 def api_volunteer_list(request):
@@ -424,7 +291,10 @@ def api_volunteer_list(request):
 def api_volunteer_pending(request, id):
     data = [{
         'id': app.volunteer.user.id,
-        'application_id': app.id,
+        'application': {
+            'id': app.id,
+            'dates_worked': app.dates_worked
+        },
         'volunteer_id': app.volunteer.id,
         'f_name': app.volunteer.user.first_name,
         'l_name': app.volunteer.user.last_name,
@@ -450,6 +320,10 @@ def api_volunteer_pending(request, id):
 def api_volunteer_requested(request, id):
     data = [{
         'id': app.volunteer.user.id,
+        'application': {
+            'id': app.id,
+            'dates_worked': app.dates_worked
+        },
         'application_id': app.id,
         'volunteer_id': app.volunteer.id,
         'f_name': app.volunteer.user.first_name,
@@ -472,9 +346,50 @@ def api_volunteer_requested(request, id):
     } for app in Application.objects.filter(opportunity = Opportunity.objects.get(id = id), status = "requesting_complete")]
     return Response(data)
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT'])
 def api_volunteer_detail(request, id):
     user = Volunteer.objects.get(id = id)
+    if request.method == 'PUT':
+        message = "Succsessfully updated"
+        colour = "green"
+        user.interests.set([])
+        for interest in request.data["interests"]:
+            user.interests.add(Interest.objects.get(id = interest))
+
+        if request.data["display_name"] and user.display_name != request.data["display_name"]:
+            user.display_name = request.data["display_name"]
+        print(request.data)
+        if request.data["password"] and request.data["passwordNew"] and request.data["passwordConfirm"]:
+            if check_password(request.data["password"], user.user.password):
+                print("hufid")
+                if request.data["passwordNew"] == request.data["password"]:
+                    message = "Passwords cannot match"
+                    colour = "green"
+                else:
+                    if request.data["passwordNew"] == request.data["passwordConfirm"]:
+                        user.user.set_password(request.data["passwordNew"])
+                        colour = "green"
+                    else:
+                        message = "New passwords do not match"
+                        colour = "green"
+                        return Response({'error': 'Passwords do not match'}, status=400)
+            else:
+                return Response({'error': 'Wrong password'}, status=400)
+
+        if request.data["showName"]:
+            user.name_share_public = True
+        else:
+            user.name_share_public = False
+
+        if request.data["showFriends"]:
+            user.public_friends = True
+        else:
+            user.public_friends = False
+            
+
+        user.save()
+        user.user.save()
+        return JsonResponse({'message': message, 'colour': colour}, status=200)
 
     pending_applications = Application.objects.filter(status = "pending", volunteer = user)
     accepted_applications = Application.objects.filter(status = "accepted", volunteer = user)
@@ -486,11 +401,16 @@ def api_volunteer_detail(request, id):
         elif friendship.from_volunteer == user:
             friends.append(friendship.to_volunteer)
 
-    messages = Messages.objects.all()
+    messages = Messages.objects.filter(volunteer = user)
+    completed = Application.objects.filter(status = "completed", volunteer = user)#
+    hours = 0
+    for comp in completed:
+        hours += comp.opportunity.estimated_duration * (comp.opportunity.end_time - comp.opportunity.start_time)
 
     data = {
         'id': user.id,
-        'hours': user.hours,
+        'email': user.user.email,
+        'hours': hours,
         'f_name': user.user.first_name,
         'l_name': user.user.last_name,
         'display_name': user.display_name,
@@ -541,8 +461,14 @@ def api_volunteer_detail(request, id):
                 "estimated_effort_ranking": application.opportunity.estimated_effort_ranking,
             },
             'date_applied': application.date_applied,
-        } for application in accepted_applications]
-
+        } for application in accepted_applications],
+        "is_user": bool(
+            request.user == user.user
+        ),
+        'interests': [{'id': interest.id, 'name': interest.name, 'category': interest.category.name} for interest in user.interests.all()],
+        'interests_ids': [interest.id for interest in user.interests.all()],
+        'showName': user.name_share_public,
+        'showFriends': user.public_friends
     }
     return Response(data)
 
@@ -566,33 +492,6 @@ def volunteers_order(volunteers, order):
         volunteers = volunteers.order_by("overall_score")  # Ascending order
 
     return volunteers
-
-def view_leaderboard(request):
-    leaderboard_order = request.POST.get('order')
-    friends_only = request.POST.get('friends_only')
-    friends = []
-
-    volunteers = Volunteer.objects.all()
-
-
-
-    if friends_only:
-        current_user = Volunteer.objects.get(user = request.user)
-        for friendship in Friendship.objects.filter(status = "accepted"):
-            if friendship.to_volunteer == current_user:
-                friends.append(friendship.from_volunteer)
-            if friendship.from_volunteer == current_user:
-                friends.append(friendship.to_volunteer)
-        volunteers = friends
-
-    if leaderboard_order != "-":
-        volunteers = volunteers_order(volunteers, leaderboard_order)
-
-
-
-    return render(request, "leaderboard.html", {"volunteers": volunteers})
-
-
 
 
 def sort(opportunities, type):
@@ -654,77 +553,6 @@ def calculate_opp_in_distance(opportunities, user_postcode, max_distance_km):
 
     return filtered
 
-def ordering(opportunities, order):
-    if order == "nearest_deadline":
-        ordered = opportunities.order_by("-start_time")
-
-    elif order == "furthest_deadline":
-        ordered = opportunities.order_by("start_time")
-
-    elif order == "newest":
-        ordered = opportunities.order_by("-date_created")
-
-    elif order == "oldest":
-        ordered = opportunities.order_by("date_created")
-    return ordered
-
-def filtered_opp(request):
-    elderly = request.POST.get('elderly') == 'on'
-    medical = request.POST.get('medical') == 'on'
-    disability = request.POST.get('disability') == 'on'
-    animal = request.POST.get('animal') == 'on'
-    educational = request.POST.get('educational') == 'on'
-    sport = request.POST.get('sport') == 'on'
-    greener_planet = request.POST.get('greener_planet') == 'on'
-    community = request.POST.get('community') == 'on'
-    verification = request.POST.get('verification') == 'on'
-    effort = request.POST.get('effort')
-    user_postcode = request.POST.get('user_postcode')
-    max_distance_km = request.POST.get('max_distance_km')
-    order = request.POST.get('order')
-
-
-    opportunities = Opportunity.objects.all()
-
-    if elderly:
-        opportunities = sort(opportunities, "Elderly")
-
-    if medical:
-        opportunities = sort(opportunities, "Medical")
-
-    if disability:
-        opportunities = sort(opportunities, "Disability")
-
-    if animal:
-        opportunities = sort(opportunities, "Animal")
-
-    if educational:
-        opportunities = sort(opportunities, "Educational")
-
-    if sport:
-        opportunities = sort(opportunities, "Sports")
-
-    if greener_planet:
-        opportunities = sort(opportunities, "Greener_Planet")
-
-    if community:
-        opportunities = sort(opportunities, "Community")
-
-    if verification:
-        opportunities = sort_verified(opportunities, True)
-
-    if effort != "-":
-        opportunities = sort_effort(opportunities, effort)
-
-    if user_postcode and max_distance_km:
-        opportunities = calculate_opp_in_distance(opportunities, user_postcode, max_distance_km)
-
-    if order != "-":
-        opportunities = ordering(opportunities, order)
-
-
-    return render(request, "viewAllOpportunities.html", {"charities": opportunities})
-
 
 @require_GET
 def charity_search(request):
@@ -778,6 +606,56 @@ def charity_details(request, reg_number, suffix=0):
         data = response.json()
         return JsonResponse({
             'activities': data.get('activities', '')
+        })
+    except requests.RequestException as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@require_GET
+def charity_contact_information(request, reg_number, suffix=0):
+    if not reg_number:
+        return JsonResponse({'error': 'Registration number required'}, status=400)
+
+    api_url = f"https://api.charitycommission.gov.uk/register/api/charitycontactinformation/{reg_number}/{suffix}"
+    headers = {
+        'Ocp-Apim-Subscription-Key': settings.CHARITY_API_KEY,
+        'Cache-Control': 'no-cache'
+    }
+
+    try:
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Process the web URL to extract just the domain
+        web_url = data.get('web', '')
+        domain = web_url
+        
+        if web_url:
+            # Add protocol if not present for proper URL parsing
+            if not web_url.startswith('http://') and not web_url.startswith('https://'):
+                parse_url = f"https://{web_url}"
+            else:
+                parse_url = web_url
+                
+            try:
+                parsed_url = urlparse(parse_url)
+                # Get the netloc (network location part, i.e., the domain)
+                domain = parsed_url.netloc
+                # If netloc is empty, use the original URL
+                if not domain:
+                    domain = web_url
+                # Remove 'www.' prefix if present
+                elif domain.startswith('www.'):
+                    domain = domain[4:]
+            except Exception:
+                # If parsing fails, just use the original URL
+                domain = web_url
+        
+        return JsonResponse({
+            'contact_address': data.get('contact_address', ''),
+            'phone': data.get('phone', ''),
+            'email': data.get('email', ''),
+            'web': domain
         })
     except requests.RequestException as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -900,11 +778,12 @@ def google_login_callback(request):
 @api_view(['POST'])
 def register_volunteer(request):
     email = request.data.get('email')
-    first_name = request.data.get('first_name')
-    last_name = request.data.get('last_name')
+    first_name = request.data.get('f_name')
+    last_name = request.data.get('l_name')
     display_name = request.data.get('display_name')
     password = request.data.get('password')
     password2 = request.data.get('password2')
+    interests = request.data.get("interests", [])
 
     if password != password2:
         return Response({'error': 'Passwords do not match'}, status=400)
@@ -912,6 +791,11 @@ def register_volunteer(request):
     try:
         user = User.objects.create_user(username=email, first_name = first_name, last_name = last_name, email=email, password=password)
         volunteer = Volunteer.objects.create(user=user, display_name = display_name)
+        if len(interests) > 1:
+            inter = Interest.objects.filter(id__in=interests)  # Get existing interests
+        else:
+            inter = Interest.objects.get(id = interests[0])
+        volunteer.interests.set(inter)
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),
@@ -922,7 +806,11 @@ def register_volunteer(request):
             }
         })
     except Exception as e:
+        print (e)
         return Response({'error': str(e)}, status=400)
+
+def generate_otp():
+    return ''.join(random.choices(string.digits, k=6))
 
 @api_view(['POST'])
 def register_organization(request):
@@ -962,9 +850,26 @@ def register_organization(request):
             charity_number=charity_number,
             description=description,
             logo=logo,
-            approved=False  # Organizations need admin approval
+            approved=False  # Organizations need email verification
         )
 
+        # Generate OTP and create verification record
+        otp_code = generate_otp()
+        OrganizationOTP.objects.create(organization=organization, otp_code=otp_code)
+        
+        # Send verification email
+        subject = 'Verify your Volunteera organization account'
+        resend.Emails.send({
+            "from": "verify@volunteermatch.dylanfarrar.com",  # Must be verified in Resend
+            "to": [email],
+            "subject": subject,
+            "html": f"""
+                <p>Thank you for registering with Volunteera!</p>
+                <p>Your verification code is: <strong>{otp_code}</strong></p>
+                <p>Please enter this code in the verification page to activate your account.</p>
+                <p>This code will expire in 24 hours.</p>
+            """,
+        })
         # Generate tokens
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -972,7 +877,8 @@ def register_organization(request):
             'access': str(refresh.access_token),
             'user': {
                 'email': user.email,
-                'is_organization': True
+                'is_organization': True,
+                'needs_verification': True
             }
         })
 
@@ -984,11 +890,45 @@ def register_organization(request):
             'error': str(e)
         }, status=400)
 
+@api_view(['POST'])
+def verify_organization(request):
+    try:
+        email = request.data.get('email')
+        otp_code = request.data.get('otp_code')
+        
+        if not email or not otp_code:
+            return Response({'error': 'Email and OTP code are required'}, status=400)
+        
+        try:
+            user = User.objects.get(email=email)
+            organization = user.organization
+            otp = OrganizationOTP.objects.get(organization=organization)
+        except (User.DoesNotExist, Organization.DoesNotExist, OrganizationOTP.DoesNotExist):
+            return Response({'error': 'Invalid email or OTP'}, status=400)
+        
+        if otp.otp_code != otp_code:
+            return Response({'error': 'Invalid OTP code'}, status=400)
+        
+        if not otp.is_valid():
+            return Response({'error': 'OTP has expired'}, status=400)
+        
+        # Verify the organization
+        organization.approved = True
+        organization.save()
+        
+        # Delete the OTP record
+        otp.delete()
+        
+        return Response({'message': 'Organization verified successfully'})
+    
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
 @api_view(['GET', 'POST'])
 def api_opportunity_list(request):
     opportunities = Opportunity.objects.filter(is_active=True).select_related('organization')
     if request.method == "POST":
-        opportunities = filtered_opp(request)
+        opportunities = calculate_opp_in_distance(opportunities, request.data["postcode"], request.data["max_distance"])
 
     data = [{
         'id': opp.id,
@@ -997,11 +937,17 @@ def api_opportunity_list(request):
         'organization': {
             'name': opp.organization.name,
             'logo': opp.organization.logo.url if opp.organization.logo else None,
+            'approved': opp.organization.approved,
         },
         'location_name': opp.location_name,
         'latitude': opp.latitude,
         'longitude': opp.longitude,
         'requirements': opp.requirements,
+        'start_time': opp.start_time,
+        'end_time': opp.end_time,
+        'start_date': opp.start_date,
+        'end_date': opp.end_date,
+        'date_created': opp.date_created,
         'pending_applications': opp.pending_applications_count(),
         'has_applied': bool(
             request.user.is_authenticated and
@@ -1009,44 +955,48 @@ def api_opportunity_list(request):
             opp.applications.filter(volunteer=request.user.volunteer).exists()
         ),
         'effort' : opp.estimated_effort_ranking,
-        'categories' : list(opp.categories.values_list('name', flat=True))
+        'categories' : list(opp.categories.values_list('name', flat=True)),
+        'capacity': opp.capacity,
+        'current_count': opp.current_volunteers_count,
+        'duration': opp.estimated_duration,
     } for opp in opportunities]
     return Response(data)
 
-@api_view(['POST'])
-def api_filter_distance(request):
-    opportunities = Opportunity.objects.filter(is_active=True).select_related('organization')
-    if request.method == "POST":
-        opportunities = calculate_opp_in_distance(opportunities, request.data.get('postcode'), request.data.get('max_distance'))
-        data = [{
-            'id': opp.id,
-            'title': opp.title,
-            'description': opp.description,
-            'organization': {
-                'name': opp.organization.name,
-                'logo': opp.organization.logo.url if opp.organization.logo else None,
-            },
-            'location_name': opp.location_name,
-            'latitude': opp.latitude,
-            'longitude': opp.longitude,
-            'requirements': opp.requirements,
-            'pending_applications': opp.pending_applications_count(),
-            'has_applied': bool(
-                request.user.is_authenticated and
-                hasattr(request.user, 'volunteer') and
-                opp.applications.filter(volunteer=request.user.volunteer).exists()
-            ),
-            'effort' : opp.estimated_effort_ranking,
-            'categories' : list(opp.categories.values_list('name', flat=True))
-        } for opp in opportunities]
-
-    return Response(data)
-
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 def api_opportunity_detail(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
-    email = request.GET.get("email", "")
-    user = User.objects.filter(email = email).first()
+    user = request.user
+    try:
+        volunteer = Volunteer.objects.get(user = user)
+    except:
+        volunteer = Volunteer.objects.get(id = 1)
+    if request.method == "POST":
+        if len(request.data) == 3:
+            try:
+                volunteer = Volunteer.objects.get(user = request.user)
+                Discussion.objects.create(volunteer = volunteer, opportunity = Opportunity.objects.get(id = request.data["opportunity"]), title = request.data["title"], content = request.data["content"])
+                return Response("Created Discussion")
+            except Exception as e:
+                return Response({"error": str(e)}, status=400)
+        
+        else:
+            try:
+                if(user == opportunity.organization.user):
+                    opportunity.title = request.data['title']
+                    opportunity.description = request.data['description']
+                    opportunity.requirements = request.data['requirements']
+                    opportunity.start_time = request.data['start_time']
+                    opportunity.end_time = request.data['end_time']
+                    opportunity.start_date = make_aware(datetime.strptime(request.data['start_date'], '%Y-%m-%dT%H:%M'))
+                    opportunity.end_date = make_aware(datetime.strptime(request.data['end_date'], '%Y-%m-%dT%H:%M'))
+                    opportunity.estimated_duration = request.data['duration']
+                    opportunity.capacity = request.data['capacity']
+                    opportunity.estimated_effort_ranking = request.data['estimated_effort_ranking']
+                    opportunity.save()
+                else:
+                    return Response({"You cannot update this opportunity"}, status=403)
+            except Exception as e:
+                return Response({"error": str(e)}, status=400)
     data = {
         'id': opportunity.id,
         'title': opportunity.title,
@@ -1055,27 +1005,27 @@ def api_opportunity_detail(request, pk):
         'organization': {
             'name': opportunity.organization.name,
             'logo': opportunity.organization.logo.url if opportunity.organization.logo else None,
+            'approved': opportunity.organization.approved,
         },
         'location_name': opportunity.location_name,
         'latitude': opportunity.latitude,
         'longitude': opportunity.longitude,
         'is_owner': bool(
-            request.user.is_authenticated and
-            hasattr(request.user, 'organization') and
-            opportunity.organization == request.user.organization
+            opportunity.organization.user == user
         ),
         'has_applied': bool(
-            request.user.is_authenticated and
-            hasattr(request.user, 'volunteer') and
+            request.user.is_authenticated and 
+            hasattr(request.user, 'volunteer') and 
             opportunity.applications.filter(volunteer=request.user.volunteer).exists()
         ),
-        'application_status': opportunity.applications.filter(
-            volunteer=request.user.volunteer
-        ).first().status if (
-            request.user.is_authenticated and
-            hasattr(request.user, 'volunteer') and
-            opportunity.applications.filter(volunteer=request.user.volunteer).exists()
-        ) else None
+        'start_time': opportunity.start_time,
+        'end_time': opportunity.end_time,
+        'duration': opportunity.estimated_duration,
+        'start_date': opportunity.start_date.strftime('%Y-%m-%dT%H:%M'),
+        'end_date': opportunity.end_date.strftime('%Y-%m-%dT%H:%M'),
+        'capacity': opportunity.capacity,
+        'estimated_effort_ranking': opportunity.estimated_effort_ranking,
+        'estimated_points': calculate_impact(opportunity, volunteer)
     }
     return Response(data)
 
@@ -1117,7 +1067,7 @@ def api_organization_stats(request):
     data = {
         'total_opportunities': opportunities.count(),
         'active_opportunities': opportunities.filter(is_active=True).count(),
-        'total_applications': sum(opp.applications.count() for opp in opportunities),
+        'total_applications': sum(opp.applications.exclude(status = "completed").count() for opp in opportunities),
         'pending_applications': sum(opp.applications.filter(status='pending').count() for opp in opportunities),
         'request_applications': sum(opp.applications.filter(status='requesting_complete').count() for opp in opportunities),
         'recent_opportunities': OpportunitySerializer(
@@ -1133,17 +1083,19 @@ def api_organization_profile(request):
         return Response({'error': 'Not authorized'}, status=403)
 
     org = request.user.organization
-
+    print(request.method)
     if request.method == 'GET':
         return Response({
             'name': org.name,
             'description': org.description,
             'charity_number': org.charity_number,
             'logo': org.logo.url if org.logo else None,
-            'email': org.user.email
+            'email': org.user.email,
+            'automatic': org.automatic_accepting
         })
 
     elif request.method == 'PUT':
+        
         try:
             if 'name' in request.data:
                 org.name = request.data['name']
@@ -1151,6 +1103,8 @@ def api_organization_profile(request):
                 org.description = request.data['description']
             if 'logo' in request.FILES:
                 org.logo = request.FILES['logo']
+            if 'automatic' in request.data:
+                org.automatic_accepting = request.data['automatic']
             org.save()
 
             return Response({
@@ -1158,10 +1112,10 @@ def api_organization_profile(request):
                 'description': org.description,
                 'charity_number': org.charity_number,
                 'logo': org.logo.url if org.logo else None,
-                'email': org.user.email
+                'email': org.user.email,
             })
         except Exception as e:
-            return Response({'error': str(e)}, status=400)
+            return Response('error: ', str(e), status = 400)
 
 @api_view(['GET'])
 def api_list_categories(request):
@@ -1174,17 +1128,66 @@ def api_list_categories(request):
     } for category in categories]
     return Response(data)
 
+@api_view(['GET'])
+def api_list_interests(request):
+    interests = Interest.objects.all()
+    data = [{
+        'id': interest.id,
+        'name': interest.name,
+        'description': interest.description,
+        'category': interest.category.name
+
+    } for interest in interests]
+    return Response(data)
+
 @api_view(["POST"])
 def api_apply_opportunity(request, id):
+    global stringOfDates
+    stringOfDates = ", ".join(request.data['dates'])
+    message = "Applied successfully"
+
     if request.method == "POST":
-        data = json.loads(request.body)
-        email = data.get("email", "")
-        user = User.objects.get(email = email)
+        status = "pending"
+        user = request.user
         volunteer = Volunteer.objects.get(user = user)
         opportunity = Opportunity.objects.get(id = id)
-        cv = opportunity.current_volunteers_count
-        Application.objects.create(volunteer = volunteer, opportunity = opportunity, status = "pending", current_volunteers = cv)
-    return Response(None)
+        if opportunity.capacity > opportunity.current_volunteers_count:
+            cv = opportunity.current_volunteers_count
+            if opportunity.current_volunteers_count >= opportunity.capacity:
+                return Response("Filed to apply, capacity exceeded")
+            message = "Thank you for applying to the opportunity " + opportunity.title + ", we will be in contact shortly after we have reviewed your application!"
+            if opportunity.organization.automatic_accepting:
+                status = "accepted"
+                message = "Automatic Message: You have been accepted into the opportunity " + opportunity.title + ", for the dates " + stringOfDates + ". Thank you for your application!"
+            Application.objects.create(dates_worked = stringOfDates, volunteer = volunteer, opportunity = opportunity, status = status, current_volunteers = cv)
+            opportunity.current_volunteers_count += 1
+            opportunity.save()
+            Messages.objects.create(volunteer = volunteer, from_person = opportunity.organization.name, message = message)
+        else:
+            message = "Failed to apply, capacity has been reached"
+    return Response(message)
+
+def complete_opportunity(vol, categories, points):
+    for cat in categories:
+        if cat.name == "Elderly":
+            vol.elderly_score = vol.elderly_score + (points / len(categories))
+        elif cat.name == "Sports":
+            vol.sports_score = vol.sports_score + (points / len(categories))
+        elif cat.name == "Greener Planet":
+            vol.greener_planet_score = vol.greener_planet_score + (points / len(categories))
+        elif cat.name == "Medical":
+            vol.medical_score = vol.medical_score + (points / len(categories))
+        elif cat.name == "Disability":
+            vol.disability_score = vol.disability_score + (points / len(categories))
+        elif cat.name == "Animal":
+            vol.animals_score = vol.animals_score + (points / len(categories))
+        elif cat.name == "Educational":
+            vol.education_score = vol.education_score + (points / len(categories))
+        elif cat.name == "Community":
+            vol.community_score = vol.community_score + (points / len(categories))
+    vol.opportunities_completed = vol.opportunities_completed + 1
+    vol.last_completion = timezone.now()
+    vol.save()
 
 @api_view(["POST"])
 def api_application_update(request, id, mode):
@@ -1196,7 +1199,7 @@ def api_application_update(request, id, mode):
         organisation = app.opportunity.organization.name
         opportunity = app.opportunity.title
         if mode == "accepted":
-            message = "Hi there, thank you for your recent application to our " + opportunity + " opportunity, we are contacting you to let you know that we have approved your application and were excited to see you soon!"
+            message = message = "Hi there, thank you for your recent application to our " + opportunity + " opportunity, we are contacting you to let you know that we have approved your application for the dates " + stringOfDates +" and we're excited to see you soon!"
         elif mode == "requesting_complete":
             message = "Hi again, we have recieved your request to tick off you application for " + opportunity + ", it is under review and you should hear from us again soon!"
         elif mode == "rejected":
@@ -1207,6 +1210,7 @@ def api_application_update(request, id, mode):
             message = "Hi, your work for the opportunity, " + opportunity + " has been reviewed and deemed not completed so carry on going and tell us when you have completed it to gain epic rewards. It has been put back into your opportunities in progress. Keep going!!"
         elif mode == "completed":
             points = calculate_impact(app.opportunity, app.volunteer)
+            complete_opportunity(volunteer, app.opportunity.categories.all(), points)
             message = "Hi, were pleased to confirm that you have completed the opportunity and have been rewarded with " + str(points) + " points!! Thank you very much and we look forward to hearing from you again."
         Messages.objects.create(from_person = organisation, message = message, volunteer = volunteer)
     return Response("Application updated successfully")
@@ -1217,3 +1221,36 @@ def api_remove_message(request, id):
         app = Messages.objects.get(id = id)
         app.delete()
     return Response("Message deleted successfully")
+
+@api_view(["GET", "POST", "DELETE"])
+def api_discussions(request, id):
+    discussions = Discussion.objects.filter(opportunity = Opportunity.objects.get(id = id))
+
+    if request.method == "POST":
+        if discussions[0].opportunity.organization.user == request.user:
+            dis = Discussion.objects.get(id = request.data["id"])
+            dis.answer = request.data["answer"]
+            dis.save()
+            return Response("Updated Successfully")
+        else:
+            return Response("You need to be the owner of this discussions page", status = 403)
+    elif request.method == "DELETE":
+        dis = Discussion.objects.get(id = id)
+        try:
+            if dis.volunteer == Volunteer.objects.get(user = request.user):
+                dis.delete()
+                return Response("Deleted Successfully")
+        except Exception as e:
+            return Response("Not logged in as volunteer", status = 403)
+
+    data = [{
+        'id': dis.id,
+        'title': dis.title,
+        'content': dis.content,
+        'volunteer': dis.volunteer.display_name,
+        'volunteer_email': dis.volunteer.user.email,
+        'answer': dis.answer,
+        'time_created': dis.time_created
+    }for dis in discussions]
+
+    return Response(data)

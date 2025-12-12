@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 import os
 import json
+from django.utils import timezone
+
 from django.core.exceptions import ValidationError
 
 class User(AbstractUser):
@@ -31,9 +33,7 @@ class Interest(models.Model):
 class Volunteer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     friends = models.ManyToManyField('self', through='Friendship', symmetrical=False)
-    interests = models.ManyToManyField(Interest, related_name='interested_volunteers', blank=True, null=True)
-    #------------------------------------------------------------------------------------------- Alex added below
-    hours = models.IntegerField(default = 0)
+    interests = models.ManyToManyField(Interest, related_name='interests', blank=True, null=True)
     opportunities_completed = models.IntegerField(default = 0)
     last_completion = models.DateTimeField(null = True, blank=True)
     display_name = models.CharField(max_length = 16, unique = True)
@@ -45,6 +45,8 @@ class Volunteer(models.Model):
     greener_planet_score = models.IntegerField(default = 0)
     community_score = models.IntegerField(default = 0)
     education_score = models.IntegerField(default = 0)
+    name_share_public = models.BooleanField(default = False)
+    public_friends = models.BooleanField(default = False)
 
 
     def __str__(self):
@@ -80,9 +82,22 @@ class Organization(models.Model):
     logo = models.ImageField(upload_to='organization_logos/', null=True, blank=True)
     description = models.TextField()
     approved = models.BooleanField(default=False)
+    automatic_accepting = models.BooleanField(default = False)
 
     def __str__(self):
         return self.name
+
+class OrganizationOTP(models.Model):
+    organization = models.OneToOneField(Organization, on_delete=models.CASCADE)
+    otp_code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"OTP for {self.organization.name}"
+
+    def is_valid(self):
+        # OTP is valid for 24 hours
+        return timezone.now() < self.created_at + timezone.timedelta(hours=24)
 
 class Opportunity(models.Model):
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='opportunities')
@@ -148,6 +163,7 @@ class Application(models.Model):
     date_applied = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)
     notes = models.TextField(blank=True)
+    dates_worked = models.CharField(max_length=1024)
 
     class Meta:
         unique_together = ['volunteer', 'opportunity']
@@ -163,3 +179,14 @@ class Messages(models.Model):
 
     def __str__(self):
         return f"From {self.from_person}, To {self.volunteer}"
+
+class Discussion(models.Model):
+    volunteer = models.ForeignKey(Volunteer, on_delete=models.CASCADE)
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE)
+    title = models.CharField(max_length = 128)
+    content = models.TextField(max_length = 2048)
+    answer = models.TextField(max_length=2048, null = True, blank = True)
+    time_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title

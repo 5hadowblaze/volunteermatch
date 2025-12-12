@@ -147,7 +147,7 @@ class Command(BaseCommand):
             "Disability",
             "Animal",
             "Sports",
-            "Greener_Planet",
+            "Greener Planet",
             "Educational",
             "Community",
         ]
@@ -553,7 +553,7 @@ class Command(BaseCommand):
             }
         )
         if created:  
-            opportunity.categories.set([Category.objects.get(name="Educaitonal")])
+            opportunity.categories.set([Category.objects.get(name="Educational")])
 
 
         opportunity, created = Opportunity.objects.get_or_create(
@@ -813,7 +813,7 @@ class Command(BaseCommand):
             }
         )
         if created:  
-            opportunity.categories.set([Category.objects.get(name="Greener_Planet")])
+            opportunity.categories.set([Category.objects.get(name="Greener Planet")])
 
 
         opportunity, created = Opportunity.objects.get_or_create(
@@ -1292,3 +1292,114 @@ class Command(BaseCommand):
             user.set_password("1234")
             user.save()
             volunteer, _ = Volunteer.objects.get_or_create(user=user, display_name=vol_data["display_name"])
+
+    
+        elderly = Category.objects.get(name = "Elderly")
+        animals = Category.objects.get(name = "Animal")
+        sports = Category.objects.get(name = "Sports")
+        education = Category.objects.get(name = "Educational")
+        community = Category.objects.get(name = "Community")
+        greener_planet = Category.objects.get(name = "Greener Planet")
+        disability = Category.objects.get(name = "Disability")
+        medical = Category.objects.get(name = "Medical")
+
+        interests = [
+            {
+                'name': 'Elderly',
+                'category': elderly,
+                'description': 'Helping the elderly people to bring kindness into the world'
+            },
+            {
+                'name': 'Retail',
+                'category': community,
+                'description': 'Helping retail shops sell items and manage their stock'
+            },
+            {
+                'name': 'Animals',
+                'category': animals,
+                'description': 'Caring for and protecting animals in need'
+            },
+            {
+                'name': 'Sports',
+                'category': sports,
+                'description': 'Encouraging fitness, teamwork, and sportsmanship'
+            },
+            {
+                'name': 'Education',
+                'category': education,
+                'description': 'Providing learning opportunities for all ages'
+            },
+            {
+                'name': 'Community',
+                'category': community,
+                'description': 'Building stronger, more connected local communities'
+            },
+            {
+                'name': 'Greener Planet',
+                'category': greener_planet,
+                'description': 'Promoting sustainability and environmental awareness'
+            },
+            {
+                'name': 'Disability',
+                'category': disability,
+                'description': 'Supporting individuals with disabilities and advocating for accessibility'
+            },
+            {
+                'name': 'Medical',
+                'category': medical,
+                'description': 'Assisting healthcare initiatives and improving public health'
+            },
+            {
+                'name': 'Senior Companion',
+                'category': elderly,
+                'description': 'Spending time with elderly individuals to provide companionship and support.'
+            },
+            {
+                'name': 'Wildlife Conservation',
+                'category': animals,
+                'description': 'Helping protect wildlife and their habitats through conservation efforts.'
+            },
+            {
+                'name': 'Youth Sports Coach',
+                'category': sports,
+                'description': 'Coaching or mentoring young athletes in various sports.'
+            },
+            {
+                'name': 'Tutoring Underprivileged Children',
+                'category': education,
+                'description': 'Providing academic support to children from disadvantaged backgrounds.'
+            },
+            {
+                'name': 'Community Cleanup Leader',
+                'category': community,
+                'description': 'Organizing and leading efforts to clean up local parks, streets, and public areas.'
+            },
+            {
+                'name': 'Tree Planting Volunteer',
+                'category': greener_planet,
+                'description': 'Taking part in reforestation and environmental sustainability projects.'
+            },
+            {
+                'name': 'Disability Support Assistant',
+                'category': disability,
+                'description': 'Assisting individuals with disabilities in daily activities and social integration.'
+            },
+            {
+                'name': 'First Aid Responder',
+                'category': medical,
+                'description': 'Providing basic medical aid and support at events or in the community.'
+            },
+            {
+                'name': 'Animal Shelter Helper',
+                'category': animals,
+                'description': 'Caring for abandoned or rescued animals at local shelters.'
+            },
+            {
+                'name': 'Mental Health Advocate',
+                'category': medical,
+                'description': 'Raising awareness and offering peer support for mental health initiatives.'
+            }
+        ]
+
+        for inter in interests:
+            Interest.objects.get_or_create(name = inter['name'], category = inter['category'], description = inter['description'])

@@ -44,16 +44,8 @@ const OrganizationDashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const formData = new FormData();
-      Object.keys(editForm).forEach(key => {
-        if (editForm[key] !== profile[key]) {
-          formData.append(key, editForm[key]);
-        }
-      });
-
-      const response = await api.put('/organization/profile/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      
+      const response = await api.put('/organization/profile/', editForm)
       setProfile(response);
       setIsEditing(false);
     } catch (error) {
@@ -111,6 +103,15 @@ const OrganizationDashboard = () => {
                       className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100"
                     />
                   </div>
+                  <div className='flex'>
+                    <label className="block text-sm font-medium text-gray-700 mr-5">Automatically accept requests?  </label>
+                    <input 
+                     className = "flex"
+                     type = "checkbox" 
+                     defaultChecked = {editForm.automatic}
+                     onChange={e => setEditForm({...editForm, automatic: e.target.checked})}/>
+                      
+                  </div>
                   <div className="flex justify-end">
                     <button
                       type="submit"
@@ -150,9 +151,9 @@ const OrganizationDashboard = () => {
             {/* Recent Opportunities */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold">Recent Opportunities</h2>
+                <h2 className="text-xl font-semibold">Live Opportunities</h2>
                 <Link
-                  to="/create-opportunity"
+                  to="/opportunities/create"
                   className="px-4 py-2 text-sm font-medium rounded-full text-white bg-gray-900 hover:bg-gray-800"
                 >
                   Create New
@@ -171,7 +172,19 @@ const OrganizationDashboard = () => {
                         to={`/opportunity/${opportunity.id}/pending/`}
                         className="text-sm text-gray-600 hover:text-gray-900"
                       >
-                        View Details →
+                        View Applications →
+                      </Link>
+                      <Link
+                        to={`/opportunity/${opportunity.id}/edit/`}
+                        className="text-sm text-gray-600 hover:text-gray-900"
+                      >
+                        Edit
+                      </Link>
+                      <Link
+                        to={`/opportunity/${opportunity.id}/discussions/`}
+                        className="text-sm text-gray-600 hover:text-gray-900"
+                      >
+                        Discussions
                       </Link>
                     </div>
                   </div>
