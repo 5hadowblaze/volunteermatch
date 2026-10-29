@@ -1,15 +1,41 @@
-Welcome to your repo for COM2027, Group 7!
-=====================================================
+# Volunteera
 
-Feel free to change this README.
+Volunteera is a University of Surrey COM2027 group project: a web application designed to connect volunteers with charities and organisations seeking help with social causes.
 
-Getting started
----------------
+The repository contains the work of Group 7: Alex Morris, William Rodriguez-Ward, Thomas Fitzsimons, Adel Anarbayeva, Rudhr Shaji, Dzak Dzulzalani and Dylan Farrar.
 
-Before you get started, you should update your com2027.yml file with your team members and project details. This will appear at [your static site](https://csee.pages.surrey.ac.uk/com2027/2024-25/Group7).
+## What the application includes
 
-You have two branches created for you, `trunk` and `release`. The final commit on `release` will be marked.
+- Volunteer and organisation registration and profiles.
+- Browsing volunteering opportunities, applications and opportunity discussions.
+- Organisation tools for creating opportunities and managing applications.
+- Volunteer interests, friendships, badges and a leaderboard.
 
-Commits must be merged into `release` using a merge request, which requires two approvals. Force-pushing is disabled for both branches, as this can destroy your work. Only `trunk` can be merged into `release`.
+These describe the functionality represented in the repository; this is a coursework project and the current deployment or service availability has not been verified.
 
-You may develop directly on `trunk`, although it is recommended that you branch from `trunk` and submit merge requests (or merge directly onto the branch). How you use `trunk` is up to your team.
+## Technology
+
+- **Frontend:** React, React Router, Vite and Tailwind CSS.
+- **Backend:** Python, Django, Django REST Framework and Django Channels.
+- **Infrastructure:** Docker Compose, Redis, Daphne and nginx.
+
+## Repository layout
+
+- `frontend/` — React application.
+- `backend/` — Django models, views and API routes.
+- `volunteermatch/` — Django project configuration.
+- `docker-compose.yml` and `Dockerfile.*` — container configuration.
+
+## Running the project
+
+The repository includes a Docker Compose configuration:
+
+```sh
+docker compose up --build
+```
+
+The configured frontend and backend ports are 5000 and 8000 respectively. This historical coursework configuration has not been retested; external services, credentials and environment settings may need updating for a local setup. Review the configuration before deploying it.
+
+## Project context
+
+The original [group project metadata](com2027.yml) describes Volunteera as supporting social causes associated with good health and wellbeing and reduced inequalities.
